@@ -1,38 +1,92 @@
 {% extends 'base.html' %}
 
 {% block content %}
-<div class="container">
-    <h2 class="text-center mb-4">Popüler Ürünler</h2>
+<!-- Hero Section -->
+<div id="carouselExampleIndicators" class="carousel slide" data-bs-ride="carousel">
+    <div class="carousel-indicators">
+        <button type="button" data-bs-target="#carouselExampleIndicators" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Slide 1"></button>
+        <button type="button" data-bs-target="#carouselExampleIndicators" data-bs-slide-to="1" aria-label="Slide 2"></button>
+        <button type="button" data-bs-target="#carouselExampleIndicators" data-bs-slide-to="2" aria-label="Slide 3"></button>
+    </div>
+    <div class="carousel-inner">
+        <div class="carousel-item active">
+            <img src="https://via.placeholder.com/1600x500" class="d-block w-100" alt="Fanturk Slider 1">
+            <div class="carousel-caption d-none d-md-block">
+                <h5>İklimlendirme Sistemlerinde Yenilik</h5>
+                <p>Fanturk ile evinizi serinletin, enerji tasarrufu sağlayın.</p>
+            </div>
+        </div>
+        <div class="carousel-item">
+            <img src="https://via.placeholder.com/1600x500" class="d-block w-100" alt="Fanturk Slider 2">
+            <div class="carousel-caption d-none d-md-block">
+                <h5>Fan Çözümlerinde Kalite</h5>
+                <p>En yüksek performanslı fan sistemleriyle siz de tanışın.</p>
+            </div>
+        </div>
+        <div class="carousel-item">
+            <img src="https://via.placeholder.com/1600x500" class="d-block w-100" alt="Fanturk Slider 3">
+            <div class="carousel-caption d-none d-md-block">
+                <h5>Yüksek Verimli Soğutma Ürünleri</h5>
+                <p>Ev ve ofisleriniz için ideal iklimlendirme çözümleri.</p>
+            </div>
+        </div>
+    </div>
+    <button class="carousel-control-prev" type="button" data-bs-target="#carouselExampleIndicators" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+    </button>
+    <button class="carousel-control-next" type="button" data-bs-target="#carouselExampleIndicators" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+    </button>
+</div>
+
+<!-- Ürünler Bölümü -->
+<div class="container mt-5">
+    <h2 class="text-center mb-4">Popüler Ürünlerimiz</h2>
     <div class="row">
         <div class="col-md-4">
-            <div class="card mb-4 shadow-sm">
-                <img src="https://via.placeholder.com/300" class="card-img-top" alt="Ürün 1">
+            <div class="card h-100">
+                <img src="https://via.placeholder.com/400x300" class="card-img-top" alt="Ürün 1">
                 <div class="card-body">
                     <h5 class="card-title">Ürün 1</h5>
-                    <p class="card-text">Ürün 1 açıklaması burada yer alır.</p>
-                    <a href="#" class="btn btn-primary">Detaylar</a>
+                    <p class="card-text">Bu ürün, yüksek verimli soğutma ve enerji tasarrufu sağlamak için tasarlanmıştır.</p>
+                    <a href="#" class="btn btn-primary">Detaylı İncele</a>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card mb-4 shadow-sm">
-                <img src="https://via.placeholder.com/300" class="card-img-top" alt="Ürün 2">
+            <div class="card h-100">
+                <img src="https://via.placeholder.com/400x300" class="card-img-top" alt="Ürün 2">
                 <div class="card-body">
                     <h5 class="card-title">Ürün 2</h5>
-                    <p class="card-text">Ürün 2 açıklaması burada yer alır.</p>
-                    <a href="#" class="btn btn-primary">Detaylar</a>
+                    <p class="card-text">Evinizin konforu için ideal fan çözümleri. Hem sessiz hem de güçlü performans.</p>
+                    <a href="#" class="btn btn-primary">Detaylı İncele</a>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card mb-4 shadow-sm">
-                <img src="https://via.placeholder.com/300" class="card-img-top" alt="Ürün 3">
+            <div class="card h-100">
+                <img src="https://via.placeholder.com/400x300" class="card-img-top" alt="Ürün 3">
                 <div class="card-body">
                     <h5 class="card-title">Ürün 3</h5>
-                    <p class="card-text">Ürün 3 açıklaması burada yer alır.</p>
-                    <a href="#" class="btn btn-primary">Detaylar</a>
+                    <p class="card-text">Geniş alanlar için yüksek kapasiteli ve enerji dostu iklimlendirme sistemi.</p>
+                    <a href="#" class="btn btn-primary">Detaylı İncele</a>
                 </div>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Fanturk Hakkında -->
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-6">
+            <h3>Fanturk Hakkında</h3>
+            <p>Fanturk, en yeni teknolojiye sahip iklimlendirme sistemleri ve fan çözümlerini sunar. Kaliteli ürünlerimizle müşteri memnuniyetini her zaman ön planda tutuyoruz.</p>
+        </div>
+        <div class="col-md-6">
+            <img src="https://via.placeholder.com/600x400" class="img-fluid" alt="Fanturk Hakkında">
         </div>
     </div>
 </div>

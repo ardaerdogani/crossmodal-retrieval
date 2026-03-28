@@ -4,3 +4,21 @@ __pycache__/
 venv/
 checkpoints/
 checkpoints/
+
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+
+# generated outputs
+*.png
+*.jpg
+*.jpeg
+*.pdf
+
+# environment / system
+.env
+venv/
+.envrc
+
+# Jupyter
+*.nbconvert.ipynb

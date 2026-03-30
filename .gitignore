@@ -9,11 +9,14 @@ checkpoints/
 __pycache__/
 *.pyc
 
-# generated outputs
-*.png
-*.jpg
-*.jpeg
-*.pdf
+# generated outputs (root-level only)
+/*.png
+/*.jpg
+/*.jpeg
+/*.pdf
+
+# keep assets tracked
+!assets/
 
 # environment / system
 .env

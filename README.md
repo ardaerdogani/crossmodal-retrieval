@@ -42,7 +42,38 @@ The dataset is downloaded automatically via `kagglehub` when the notebook is fir
 | Max token length | 64 |
 | Train / val split | 90 / 10 (seed 42) |
 
-Best validation loss: **0.4171** (epoch 10)
+### Results
+
+| Epoch | Val Loss | Checkpoint |
+|:---:|:---:|:---:|
+| 1 | 0.7440 | saved |
+| 2 | 0.5232 | saved |
+| 3 | 0.4639 | saved |
+| **4** | **0.4059** | **saved ← best** |
+| 5 | 0.4071 | |
+| 6 | 0.4091 | |
+| 7 | 0.4568 | |
+| 8 | 0.4479 | |
+| 9 | 0.4275 | |
+| 10 | 0.4300 | |
+
+Best validation loss: **0.4059** at epoch 4. The model shows mild overfitting from epoch 5 onward (train loss ~0.13 vs val loss ~0.43), which is expected given the small dataset and large pretrained encoders.
+
+Temperature decayed from 0.0698 → 0.0456 over training as the model sharpened its similarity distributions.
+
+## Visualization
+
+### Similarity Matrix
+
+Cosine similarities between 10 unique image-text pairs, using the best checkpoint. A strong diagonal confirms that matched pairs score highest — the model correctly associates each image with its caption over all other captions in the set.
+
+![Similarity Matrix](assets/similarity_matrix.png)
+
+### UMAP Projection
+
+200 image and text embeddings projected from 256-d to 2-d with UMAP (cosine metric). Blue circles are image embeddings, red triangles are text embeddings. Gray lines connect matching pairs — shorter lines indicate tighter alignment.
+
+![UMAP Embeddings](assets/umap_embeddings.png)
 
 ## Project Structure
 
@@ -50,6 +81,9 @@ Best validation loss: **0.4171** (epoch 10)
 crossmodal-retrieval/
 ├── train.ipynb        # Single self-contained notebook (data, models, training, visualization)
 ├── requirements.txt   # Python dependencies
+├── assets/            # Output plots for README
+│   ├── similarity_matrix.png
+│   └── umap_embeddings.png
 └── checkpoints/       # Saved model weights (gitignored)
     └── best_model.pt
 ```
@@ -68,7 +102,7 @@ All code lives in `train.ipynb`. Cell structure:
 | 17 | Model and optimizer instantiation |
 | 19 | Training functions |
 | 21 | Training loop with checkpointing |
-| 23–25 | Visualization (similarity matrix, UMAP) |
+| 23–25 | Visualization (similarity matrix heatmap, UMAP) |
 
 ## Requirements
 
@@ -105,14 +139,6 @@ mkdir -p ~/.kaggle
 echo '{"username":"YOUR_USERNAME","key":"YOUR_API_KEY"}' > ~/.kaggle/kaggle.json
 chmod 600 ~/.kaggle/kaggle.json
 ```
-
-## Visualization
-
-After training, the notebook generates two plots saved as PNG files:
-
-**Similarity matrix** — cosine similarities between 10 unique image-text pairs, compared before and after training. A strong diagonal in the "after" panel confirms that matching pairs have been aligned.
-
-**UMAP projection** — 200 image and text embeddings reduced to 2D. Blue circles are image embeddings, red triangles are text embeddings. Gray lines connect matching pairs; short lines indicate good alignment.
 
 ## References
 

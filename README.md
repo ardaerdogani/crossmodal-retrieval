@@ -17,7 +17,7 @@ Text: "a dog running on the beach"
 
 ## Dataset
 
-[Flickr8k](https://www.kaggle.com/datasets/adityajn105/flickr8k) — 8,092 images with 5 human-written captions each (~40k image-text pairs total).
+[Flickr8k](https://www.kaggle.com/datasets/adityajn105/flickr8k) — 8,091 images with 5 human-written captions each (~40k image-text pairs total).
 
 The dataset is downloaded automatically via `kagglehub` when the notebook is first run. A [Kaggle account and API token](https://www.kaggle.com/settings/account) are required.
 
@@ -46,44 +46,49 @@ The dataset is downloaded automatically via `kagglehub` when the notebook is fir
 
 | Epoch | Val Loss | Checkpoint |
 |:---:|:---:|:---:|
-| 1 | 0.7440 | saved |
-| 2 | 0.5232 | saved |
-| 3 | 0.4639 | saved |
-| **4** | **0.4059** | **saved ← best** |
-| 5 | 0.4071 | |
-| 6 | 0.4091 | |
-| 7 | 0.4568 | |
-| 8 | 0.4479 | |
-| 9 | 0.4275 | |
-| 10 | 0.4300 | |
+| 1 | 0.7584 | saved |
+| 2 | 0.5511 | saved |
+| 3 | 0.4610 | saved |
+| **4** | **0.4237** | **saved ← best** |
+| 5 | 0.4374 | |
+| 6 | 0.4267 | |
+| 7 | 0.4376 | |
+| 8 | 0.4318 | |
+| 9 | 0.4359 | |
+| 10 | 0.4491 | |
 
-Best validation loss: **0.4059** at epoch 4. The model shows mild overfitting from epoch 5 onward (train loss ~0.13 vs val loss ~0.43), which is expected given the small dataset and large pretrained encoders.
-
-Temperature decayed from 0.0698 → 0.0456 over training as the model sharpened its similarity distributions.
+Best validation loss: **0.4237** at epoch 4. The model shows mild overfitting from epoch 5 onward (train loss ~0.13 vs val loss ~0.43), which is expected given the small dataset and large pretrained encoders. Temperature decayed from 0.0698 → ~0.046 over training as the model sharpened its similarity distributions.
 
 ## Visualization
 
 ### Similarity Matrix
 
-Cosine similarities between 10 unique image-text pairs, using the best checkpoint. A strong diagonal confirms that matched pairs score highest — the model correctly associates each image with its caption over all other captions in the set.
+Cosine similarities between 10 unique image-text pairs, using the best checkpoint. A strong diagonal in the "After Training" panel confirms that each image scores highest against its own caption — the model has successfully learned cross-modal alignment.
 
 ![Similarity Matrix](assets/similarity_matrix.png)
 
 ### UMAP Projection
 
-200 image and text embeddings projected from 256-d to 2-d with UMAP (cosine metric). Blue circles are image embeddings, red triangles are text embeddings. Gray lines connect matching pairs — shorter lines indicate tighter alignment.
+200 image and text embeddings projected from 256-d to 2-d with UMAP (cosine metric). Blue circles are image embeddings, red triangles are text embeddings. Gray lines connect matching pairs — shorter lines indicate tighter alignment between an image and its caption.
 
 ![UMAP Embeddings](assets/umap_embeddings.png)
+
+### Retrieval Demo
+
+Top-5 retrieved images for five curated queries. The model encodes the text query, computes cosine similarity against all 8,091 pre-embedded images, and returns the closest matches. Similarity scores are shown below each image.
+
+![Retrieval Demo](assets/retrieval_demo.png)
 
 ## Project Structure
 
 ```
 crossmodal-retrieval/
-├── train.ipynb        # Single self-contained notebook (data, models, training, visualization)
+├── train.ipynb        # Single self-contained notebook (data, models, training, visualization, demo)
 ├── requirements.txt   # Python dependencies
-├── assets/            # Output plots for README
+├── assets/            # Output plots
 │   ├── similarity_matrix.png
-│   └── umap_embeddings.png
+│   ├── umap_embeddings.png
+│   └── retrieval_demo.png
 └── checkpoints/       # Saved model weights (gitignored)
     └── best_model.pt
 ```
@@ -103,6 +108,7 @@ All code lives in `train.ipynb`. Cell structure:
 | 19 | Training functions |
 | 21 | Training loop with checkpointing |
 | 23–25 | Visualization (similarity matrix heatmap, UMAP) |
+| 27–28 | Retrieval demo (image index + query grid) |
 
 ## Requirements
 

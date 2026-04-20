@@ -1,23 +1,28 @@
-# Crossmodal Retrieval
+# Crossmodal Generation — Image Captioning
 
-A miniature CLIP-style contrastive learning system built from scratch with PyTorch. Two encoders — one for images, one for text — are trained jointly to align their representations in a shared 256-dimensional embedding space, enabling text-to-image retrieval.
+An image captioning model built from scratch with PyTorch. A ResNet18 encoder produces a grid of spatial image features; a transformer decoder cross-attends to those features and autoregressively generates a caption, one token at a time.
 
 ## Overview
 
-The model learns by pulling together embeddings of matching image-caption pairs while pushing apart non-matching ones within each batch (InfoNCE loss). After training, a text query can be encoded and compared against all image embeddings to retrieve the most semantically similar images.
+The task is **cross-modal generation**: conditioned on an image (non-text modality), the model produces text (a natural-language caption). During training, the decoder is shown ground-truth tokens shifted right (*teacher forcing*) and predicts the next token at every position. At inference, it generates one token at a time (greedy decoding), stopping on `[SEP]` or at max length.
 
 ```
-Text: "a dog running on the beach"
-         │
-    [TextEncoder]          [ImageEncoder]
-    BERT + projection      ResNet18 + projection
-         │                       │
-    256-d embedding ──── cosine similarity ──── ranked images
+Image (224×224)                Caption tokens (shifted right)
+      │                                       │
+[ResNet18 → 7×7×512]              [Token + position embeddings]
+      │                                       │
+[1×1 conv → d_model]                          │
+      │                                       │
+  49 image "tokens" ────cross-attention────> [Transformer Decoder × N]
+                                              │
+                                       [Linear → vocab logits]
+                                              │
+                                       next-token prediction
 ```
 
 ## Dataset
 
-[Flickr8k](https://www.kaggle.com/datasets/adityajn105/flickr8k) — 8,091 images with 5 human-written captions each (~40k image-text pairs total).
+[Flickr8k](https://www.kaggle.com/datasets/adityajn105/flickr8k) — 8,091 images with 5 human-written captions each (~40k image-caption pairs).
 
 The dataset is downloaded automatically via `kagglehub` when the notebook is first run. A [Kaggle account and API token](https://www.kaggle.com/settings/account) are required.
 
@@ -25,70 +30,72 @@ The dataset is downloaded automatically via `kagglehub` when the notebook is fir
 
 | Component | Details |
 |---|---|
-| Image encoder | ResNet18 (pretrained on ImageNet) → projection head (512 → 256 → 256) → L2 norm |
-| Text encoder | BERT `bert-base-uncased` → [CLS] token → projection head (768 → 256 → 256) → L2 norm |
-| Loss | InfoNCE (symmetric cross-entropy over the N×N cosine similarity matrix) |
-| Temperature | Learnable log-temperature, initialized at 0.07 |
+| Image encoder | ResNet18 (pretrained on ImageNet), truncated before global pooling → 7×7×512 feature map → 1×1 conv projects each cell to 256-d → flattened to 49 "image tokens" |
+| Tokenizer | BERT `bert-base-uncased` WordPiece (~30k vocab). `[CLS]` is reused as BOS, `[SEP]` as EOS, `[PAD]` (id 0) is ignored by loss and attention |
+| Decoder | 4-layer transformer decoder (`nn.TransformerDecoder`), `norm_first=True`, causal self-attention + cross-attention to the 49 image tokens, learned token + position embeddings |
+| Output head | Linear → vocab logits, **weight-tied** to the input token embedding |
+| Loss | Cross-entropy over predicted-vs-next-token, `ignore_index=pad_id` |
 
 ## Training
 
 | Hyperparameter | Value |
 |---|---|
-| Optimizer | Adam |
-| Learning rate | 1e-4 |
+| Optimizer | AdamW |
+| Learning rate | 3e-4 |
 | Batch size | 64 |
-| Epochs | 10 |
-| Embedding dim | 256 |
-| Max token length | 64 |
+| Epochs | 20 |
+| Max token length | 32 |
+| `d_model` | 256 |
+| Attention heads | 4 |
+| Decoder layers | 4 |
+| FFN dim | 1024 |
+| Dropout | 0.1 |
+| Gradient clip (max-norm) | 1.0 |
 | Train / val split | 90 / 10 (seed 42) |
 
 ### Results
 
-| Epoch | Val Loss | Checkpoint |
-|:---:|:---:|:---:|
-| 1 | 0.7584 | saved |
-| 2 | 0.5511 | saved |
-| 3 | 0.4610 | saved |
-| **4** | **0.4237** | **saved ← best** |
-| 5 | 0.4374 | |
-| 6 | 0.4267 | |
-| 7 | 0.4376 | |
-| 8 | 0.4318 | |
-| 9 | 0.4359 | |
-| 10 | 0.4491 | |
+| Epoch | Val Loss | Val PPL | Checkpoint |
+|:---:|:---:|:---:|:---:|
+| 1  | 5.1747 | 176.74 | saved |
+| 2  | 4.1907 | 66.07  | saved |
+| 3  | 3.7755 | 43.62  | saved |
+| 4  | 3.4815 | 32.51  | saved |
+| 5  | 3.3075 | 27.32  | saved |
+| 6  | 3.2293 | 25.26  | saved |
+| 7  | 3.1301 | 22.88  | saved |
+| 8  | 3.0613 | 21.35  | saved |
+| 9  | 3.0237 | 20.57  | saved |
+| 10 | 3.0123 | 20.34  | saved |
+| 11 | 2.9936 | 19.96  | saved |
+| **12** | **2.9827** | **19.74** | **saved ← best** |
+| 13 | 2.9895 | 19.88  | |
+| 14 | 3.0294 | 20.69  | |
+| 15 | 3.0186 | 20.46  | |
+| 16 | 3.0274 | 20.64  | |
+| 17 | 3.1100 | 22.42  | |
+| 18 | 3.1065 | 22.34  | |
+| 19 | 3.1386 | 23.07  | |
+| 20 | 3.1152 | 22.54  | |
 
-Best validation loss: **0.4237** at epoch 4. The model shows mild overfitting from epoch 5 onward (train loss ~0.13 vs val loss ~0.43), which is expected given the small dataset and large pretrained encoders. Temperature decayed from 0.0698 → ~0.046 over training as the model sharpened its similarity distributions.
+Best validation loss **2.9827** (PPL 19.74) at epoch 12. Perplexity — `exp(loss)` — is the more interpretable metric here: on average the model is choosing the correct next word from ~20 plausible candidates out of a 30k vocabulary. Mild overfitting appears from epoch 13 onward as train loss continues to drop while val loss creeps up. Each epoch takes ~53s on an NVIDIA H100.
 
 ## Visualization
 
-### Similarity Matrix
+### Generated Captions vs. Ground Truth
 
-Cosine similarities between 10 unique image-text pairs, using the best checkpoint. A strong diagonal in the "After Training" panel confirms that each image scores highest against its own caption — the model has successfully learned cross-modal alignment.
+Six unique images from the validation set, with the model-generated caption next to a human-written reference.
 
-![Similarity Matrix](assets/similarity_matrix.png)
-
-### UMAP Projection
-
-200 image and text embeddings projected from 256-d to 2-d with UMAP (cosine metric). Blue circles are image embeddings, red triangles are text embeddings. Gray lines connect matching pairs — shorter lines indicate tighter alignment between an image and its caption.
-
-![UMAP Embeddings](assets/umap_embeddings.png)
-
-### Retrieval Demo
-
-Top-5 retrieved images for five curated queries. The model encodes the text query, computes cosine similarity against all 8,091 pre-embedded images, and returns the closest matches. Similarity scores are shown below each image.
-
-![Retrieval Demo](assets/retrieval_demo.png)
+![Captioning Demo](assets/captioning_demo.png)
 
 ## Project Structure
 
 ```
 crossmodal-retrieval/
-├── train.ipynb        # Single self-contained notebook (data, models, training, visualization, demo)
+├── train.ipynb        # Single self-contained notebook (data, models, training, demo)
 ├── requirements.txt   # Python dependencies
-├── assets/            # Output plots
-│   ├── similarity_matrix.png
-│   ├── umap_embeddings.png
-│   └── retrieval_demo.png
+├── assets/
+│   └── captioning_demo.png
 └── checkpoints/       # Saved model weights (gitignored)
     └── best_model.pt
 ```
@@ -99,16 +106,23 @@ All code lives in `train.ipynb`. Cell structure:
 |---|---|
 | 1 | Install dependencies |
 | 3 | Download Flickr8k dataset |
-| 4–6 | Imports, config, device setup |
+| 4–6 | Imports, config, device setup (GPU pinning via `CUDA_VISIBLE_DEVICES`) |
 | 8–9 | Data pipeline (`Flickr8kDataset`, train/val split) |
-| 11 | Image encoder |
-| 13 | Text encoder |
-| 15 | InfoNCE loss |
-| 17 | Model and optimizer instantiation |
-| 19 | Training functions |
-| 21 | Training loop with checkpointing |
-| 23–25 | Visualization (similarity matrix heatmap, UMAP) |
-| 27–28 | Retrieval demo (image index + query grid) |
+| 11 | Image encoder (ResNet18 → 49 image tokens) |
+| 13 | Caption decoder (transformer with causal self-attn + cross-attn) |
+| 15 | Model and optimizer instantiation |
+| 17 | Training functions (teacher-forced loss, validation) |
+| 19 | Training loop with best-checkpoint saving |
+| 21 | Greedy caption generation |
+| 23 | Demo grid (generated vs. ground-truth captions) |
+
+## Key Concepts
+
+- **Teacher forcing** — at training time the decoder is fed the ground-truth previous tokens rather than its own predictions, so every position can be trained in parallel.
+- **Causal mask** — upper-triangular mask that blocks each token from attending to future positions, enforcing left-to-right autoregressive behavior.
+- **Cross-attention** — lets each decoder position query the 49 image tokens; this is how the image conditions the generated text.
+- **Weight tying** — the output projection reuses the input embedding matrix. Halves the parameter count of the head and usually improves generalization.
+- **Greedy decoding** — at each step, pick the token with the highest probability and append it. Simple and deterministic; beam search would improve fluency at extra compute cost.
 
 ## Requirements
 
@@ -120,7 +134,6 @@ torch
 torchvision
 transformers
 kagglehub
-umap-learn
 matplotlib
 ```
 
@@ -128,10 +141,10 @@ matplotlib
 
 **Local**
 ```bash
-git clone https://github.com/ardaerdogan/crossmodal-retrieval
+git clone https://github.com/ardaerdogani/crossmodal-retrieval
 cd crossmodal-retrieval
 python -m venv venv && source venv/bin/activate
-pip install torch torchvision transformers kagglehub umap-learn matplotlib
+pip install torch torchvision transformers kagglehub matplotlib
 jupyter notebook train.ipynb
 ```
 
@@ -146,9 +159,11 @@ echo '{"username":"YOUR_USERNAME","key":"YOUR_API_KEY"}' > ~/.kaggle/kaggle.json
 chmod 600 ~/.kaggle/kaggle.json
 ```
 
+If running on a shared GPU host, edit the `CUDA_VISIBLE_DEVICES` line in the device-setup cell to pick a free GPU before the kernel first touches CUDA.
+
 ## References
 
-- Radford et al., [Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00519) (CLIP), OpenAI 2021
+- Vaswani et al., [Attention Is All You Need](https://arxiv.org/abs/1706.03762), 2017
+- Xu et al., [Show, Attend and Tell: Neural Image Caption Generation with Visual Attention](https://arxiv.org/abs/1502.03044), 2015
 - He et al., [Deep Residual Learning for Image Recognition](https://arxiv.org/abs/1512.03385) (ResNet), 2015
 - Devlin et al., [BERT: Pre-training of Deep Bidirectional Transformers](https://arxiv.org/abs/1810.04805), 2018
-- van den Oord et al., [Representation Learning with Contrastive Predictive Coding](https://arxiv.org/abs/1807.03748) (InfoNCE), 2018

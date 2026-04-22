@@ -88,16 +88,29 @@ Six unique images from the validation set, with the model-generated caption next
 
 ![Captioning Demo](assets/captioning_demo.png)
 
+## Demo
+
+After training, run the Gradio web app to caption any image interactively:
+
+```bash
+python demo.py          # local only  →  http://localhost:7860
+python demo.py --share  # public link →  https://<random>.gradio.live
+python demo.py --port 8080  # custom port
+```
+
+Upload any image and the model generates a caption in real time. No dataset required — only the checkpoint.
+
 ## Project Structure
 
 ```
 crossmodal-retrieval/
-├── train.ipynb        # Single self-contained notebook (data, models, training, demo)
-├── requirements.txt   # Python dependencies
+├── train.ipynb              # Self-contained notebook: data, model, training, eval
+├── demo.py                  # Gradio web demo (loads checkpoint, captions any image)
+├── requirements.txt         # Python dependencies
 ├── assets/
-│   └── captioning_demo.png
-└── checkpoints/       # Saved model weights (gitignored)
-    └── best_model.pt
+│   └── captioning_demo.png  # Generated caption demo (committed)
+└── checkpoints/             # Saved model weights (gitignored)
+    └── best_caption_model.pt
 ```
 
 All code lives in `train.ipynb`. Cell structure:
@@ -144,8 +157,9 @@ matplotlib
 git clone https://github.com/ardaerdogani/crossmodal-retrieval
 cd crossmodal-retrieval
 python -m venv venv && source venv/bin/activate
-pip install torch torchvision transformers kagglehub matplotlib
-jupyter notebook train.ipynb
+pip install -r requirements.txt
+jupyter notebook train.ipynb   # train the model
+python demo.py --share         # run the demo
 ```
 
 **JupyterHub**

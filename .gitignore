@@ -1,13 +1,9 @@
 dataset/
+checkpoints/
 __pycache__/
 *.pyc
 venv/
-checkpoints/
-checkpoints/
-
 .ipynb_checkpoints/
-__pycache__/
-*.pyc
 
 # generated outputs (root-level only)
 /*.png
@@ -20,7 +16,6 @@ __pycache__/
 
 # environment / system
 .env
-venv/
 .envrc
 
 # Jupyter

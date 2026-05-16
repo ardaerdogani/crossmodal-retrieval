@@ -245,10 +245,8 @@ ResNet18 encoder → Transformer decoder · Trained on Flickr8k &nbsp;|&nbsp;
 **Val Loss: {_val_loss:.4f}** · **PPL: {_ppl:.2f}** · Best epoch: {_epoch}/20
 """)
 
-    with gr.Tabs():
-
-        # ── Tab 1: Text → Image Retrieval ─────────────────────────────────────
-        with gr.Tab("🔍 Text → Image Retrieval"):
+    # ── Tab 1: Text → Image Retrieval ─────────────────────────────────────────
+    with gr.Tab("Text to Image Retrieval"):
             gr.Markdown("""
 Type a description below. **CLIP** finds the closest matching images from the Flickr8k dataset
 using cosine similarity in a shared text-image embedding space.
@@ -304,8 +302,8 @@ showing how the two modalities connect.
                 ],
             )
 
-        # ── Tab 2: Image → Caption (Live Demo) ────────────────────────────────
-        with gr.Tab("📸 Image → Caption"):
+    # ── Tab 2: Image → Caption ────────────────────────────────────────────────
+    with gr.Tab("Image to Caption"):
             gr.Markdown(
                 "Upload any image — the model generates a natural-language caption "
                 "one token at a time using greedy decoding."
@@ -330,10 +328,9 @@ showing how the two modalities connect.
                 )
 
             cap_btn.click(fn=generate_caption, inputs=img_input, outputs=caption_out)
-            img_input.change(fn=generate_caption, inputs=img_input, outputs=caption_out)
 
-        # ── Tab 3: Gallery ─────────────────────────────────────────────────────
-        with gr.Tab("🖼️ Gallery"):
+    # ── Tab 3: Gallery ────────────────────────────────────────────────────────
+    with gr.Tab("Gallery"):
             if gallery_items:
                 gr.Markdown(
                     "All captions generated automatically at server startup — "
@@ -353,8 +350,8 @@ showing how the two modalities connect.
                     "and restart the server to populate this gallery."
                 )
 
-        # ── Tab 4: Model & Results ─────────────────────────────────────────────
-        with gr.Tab("📊 Model & Results"):
+    # ── Tab 4: Model & Results ────────────────────────────────────────────────
+    with gr.Tab("Model and Results"):
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("""

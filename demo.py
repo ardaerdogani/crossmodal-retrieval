@@ -137,7 +137,8 @@ if os.path.isdir(IMAGES_DIR):
                 batch_imgs = [Image.open(p).convert("RGB") for p in all_image_paths[i : i + _batch]]
                 inputs     = clip_processor(images=batch_imgs, return_tensors="pt")
                 inputs     = {k: v.to(device) for k, v in inputs.items()}
-                embs       = clip_model.get_image_features(**inputs)
+                vision_out = clip_model.vision_model(pixel_values=inputs["pixel_values"])
+                embs       = clip_model.visual_projection(vision_out.pooler_output)
                 embs       = F.normalize(embs, dim=-1)
                 _accum.append(embs.cpu())
                 if i % (10 * _batch) == 0:
@@ -179,7 +180,9 @@ def text_to_image(query: str):
     text_inputs = clip_processor(text=[query], return_tensors="pt",
                                  truncation=True, padding=True)
     text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
-    text_emb    = clip_model.get_text_features(**text_inputs)
+    text_out    = clip_model.text_model(input_ids=text_inputs["input_ids"],
+                                        attention_mask=text_inputs["attention_mask"])
+    text_emb    = clip_model.text_projection(text_out.pooler_output)
     text_emb    = F.normalize(text_emb, dim=-1)
 
     # Cosine similarity → top 3

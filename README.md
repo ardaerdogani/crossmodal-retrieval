@@ -35,6 +35,7 @@ The dataset is downloaded automatically via `kagglehub` when the notebook is fir
 | Decoder | 4-layer transformer decoder (`nn.TransformerDecoder`), `norm_first=True`, causal self-attention + cross-attention to the 49 image tokens, learned token + position embeddings |
 | Output head | Linear → vocab logits, **weight-tied** to the input token embedding |
 | Loss | Cross-entropy over predicted-vs-next-token, `ignore_index=pad_id` |
+| Retrieval (demo) | CLIP ViT-B/32 — pretrained joint image-text encoder. Cosine similarity in the shared embedding space ranks images for a text query. Embeddings are computed once and cached in `dataset/clip_embeddings.pt`. |
 
 ## Training
 
@@ -90,27 +91,39 @@ Six unique images from the validation set, with the model-generated caption next
 
 ## Demo
 
-After training, run the Gradio web app to caption any image interactively:
+After training, run the Flask web app to caption any image and retrieve images by text:
 
 ```bash
-python demo.py          # local only  →  http://localhost:7860
-python demo.py --share  # public link →  https://<random>.gradio.live
-python demo.py --port 8080  # custom port
+python demo.py                   # local only       →  http://127.0.0.1:7860
+python demo.py --port 8080       # custom port
+python demo.py --host 0.0.0.0    # accept LAN connections
+python demo.py --debug           # auto-reload on code change
 ```
 
-Upload any image and the model generates a caption in real time. No dataset required — only the checkpoint.
+Two sections, one page:
+- **Text → Image Retrieval** — CLIP encodes your query, ranks all indexed images by cosine similarity, and the captioning model describes the top 3 matches.
+- **Image → Caption** — drag and drop any image; the model generates a caption with greedy decoding.
+
+The demo needs only the captioning **checkpoint** to start. Retrieval works against the full Flickr8k dataset if available, otherwise it falls back automatically to the small `examples/` folder.
 
 ## Project Structure
 
 ```
 crossmodal-retrieval/
 ├── train.ipynb              # Self-contained notebook: data, model, training, eval
-├── demo.py                  # Gradio web demo (loads checkpoint, captions any image)
+├── demo.py                  # Flask web demo (loads checkpoint + CLIP, exposes 3 routes)
+├── templates/
+│   └── index.html           # Single-page frontend (vanilla HTML/CSS/JS)
+├── examples/                # 6 sample images — retrieval fallback when dataset is absent
 ├── requirements.txt         # Python dependencies
 ├── assets/
 │   └── captioning_demo.png  # Generated caption demo (committed)
-└── checkpoints/             # Saved model weights (gitignored)
-    └── best_caption_model.pt
+├── checkpoints/             # Saved model weights (gitignored — must be obtained separately)
+│   └── best_caption_model.pt
+└── dataset/                 # Full Flickr8k (gitignored — optional, retrieval works without it)
+    ├── Images/
+    ├── captions.txt
+    └── clip_embeddings.pt   # CLIP embeddings cache, auto-generated on first run
 ```
 
 All code lives in `train.ipynb`. Cell structure:
@@ -139,44 +152,127 @@ All code lives in `train.ipynb`. Cell structure:
 
 ## Requirements
 
-- Python 3.10+
-- CUDA-capable GPU recommended (tested on NVIDIA H100 NVL)
+- **Python 3.10+**
+- **~3 GB of disk** for the PyTorch + transformers stack
+- **GPU optional** — the demo runs on CPU (slower captioning) or Apple Silicon MPS. Training needs a CUDA GPU (tested on NVIDIA H100 NVL).
+
+Python packages (also listed in `requirements.txt`):
 
 ```
-torch
-torchvision
-transformers
-kagglehub
-matplotlib
-gradio
-Pillow
-nltk
+torch          # model
+torchvision    # ResNet18 + image transforms
+transformers   # BERT tokenizer + CLIP
+flask          # web demo
+Pillow         # image I/O
+kagglehub      # dataset download (training only)
+matplotlib     # plots (training only)
+nltk           # BLEU evaluation (training only)
 ```
 
-## Setup
+## Setup — for collaborators
 
-**Local**
+This is the fastest path to running the demo locally. **You do not need to train the model** — just grab the checkpoint.
+
+### 1. Clone the repo
+
 ```bash
 git clone https://github.com/ardaerdogani/crossmodal-retrieval
 cd crossmodal-retrieval
-python -m venv venv && source venv/bin/activate
-pip install -r requirements.txt
-jupyter notebook train.ipynb   # train the model
-python demo.py --share         # run the demo
 ```
 
-**JupyterHub**
+### 2. Create a virtual environment
 
-Clone the repo inside JupyterHub, then open `train.ipynb` and run all cells. The first two cells install dependencies and download the dataset automatically.
+A *virtual environment* (`venv`) is an isolated Python install so this project's packages don't conflict with anything else on your machine.
 
-A Kaggle token must be configured before the dataset cell runs:
+```bash
+python -m venv venv
+source venv/bin/activate          # macOS / Linux
+# venv\Scripts\activate           # Windows PowerShell
+```
+
+You'll know it's active when your shell prompt starts with `(venv)`.
+
+### 3. Install dependencies
+
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+This downloads PyTorch, transformers, Flask, and friends. First install takes ~2–5 minutes depending on your connection.
+
+### 4. Get the model checkpoint
+
+The trained weights (`best_caption_model.pt`, ~95 MB) are **not in the repo** — they're too large for git. Ask Arda for the file, then drop it here:
+
+```
+crossmodal-retrieval/
+└── checkpoints/
+    └── best_caption_model.pt        ← place the file here
+```
+
+> **Optional:** to run text-to-image retrieval against the full 8 k Flickr dataset rather than the 6 example images, also place `dataset/Images/` + `dataset/captions.txt` in the project root. Without it the demo falls back to `examples/` automatically.
+
+### 5. Run the demo
+
+```bash
+python demo.py
+```
+
+Then open **<http://127.0.0.1:7860>** in your browser.
+
+First launch is slow (~30 s): it downloads the BERT tokenizer + CLIP weights from Hugging Face (cached in `~/.cache/huggingface/` for future runs) and computes CLIP embeddings for the image index.
+
+## Setup — for training from scratch
+
+Follow steps 1–3 above, then:
+
+```bash
+jupyter notebook train.ipynb
+```
+
+A Kaggle token is needed for the dataset download. Generate one at <https://www.kaggle.com/settings/account>, then:
+
 ```bash
 mkdir -p ~/.kaggle
 echo '{"username":"YOUR_USERNAME","key":"YOUR_API_KEY"}' > ~/.kaggle/kaggle.json
 chmod 600 ~/.kaggle/kaggle.json
 ```
 
-If running on a shared GPU host, edit the `CUDA_VISIBLE_DEVICES` line in the device-setup cell to pick a free GPU before the kernel first touches CUDA.
+On a shared GPU host, edit the `CUDA_VISIBLE_DEVICES` line in the device-setup cell to pick a free GPU before the kernel first touches CUDA.
+
+## API reference
+
+The Flask backend exposes three routes (`templates/index.html` is the bundled frontend, but you can call them from any client):
+
+| Method | Path | Body | Returns |
+|---|---|---|---|
+| `GET`  | `/`         | — | The HTML demo page |
+| `POST` | `/caption`  | `multipart/form-data` with an `image` file | `{"caption": "..."}` |
+| `POST` | `/retrieve` | JSON `{"query": "..."}` | `[{"image": "data:image/jpeg;base64,...", "score": 0.873, "caption": "..."}, ...]` (top 3) |
+
+Example with `curl`:
+
+```bash
+# caption an image
+curl -F "image=@examples/717673249_ac998cfbe6.jpg" http://127.0.0.1:7860/caption
+
+# retrieve images for a text query
+curl -X POST http://127.0.0.1:7860/retrieve \
+     -H "Content-Type: application/json" \
+     -d '{"query": "a dog on the beach"}'
+```
+
+## Troubleshooting
+
+| Symptom | Likely cause / fix |
+|---|---|
+| `FileNotFoundError: Checkpoint not found at 'checkpoints/best_caption_model.pt'` | Step 4 was skipped — place the checkpoint file in `checkpoints/`. |
+| `ModuleNotFoundError: No module named 'flask'` | The `venv` isn't active. Re-run `source venv/bin/activate`. |
+| Server starts but `/retrieve` returns *"no image index available"* | No `dataset/Images/` **and** no `.jpg`/`.png` in `examples/`. Add at least one image to `examples/` and restart. |
+| First request is very slow | First call after startup compiles CLIP kernels; subsequent calls are ~10× faster. |
+| Port 7860 already in use | Run with `--port 8080` (or any free port). |
+| macOS: "torch not compiled with CUDA" warning | Expected — the demo will use MPS (Apple Silicon) or CPU. No action needed. |
 
 ## References
 

@@ -1,13 +1,13 @@
 import argparse
-import glob
-import math
+import base64
+import io
 import os
 from pathlib import Path
 
-import gradio as gr
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from flask import Flask, jsonify, render_template, request
 from PIL import Image
 from torchvision import transforms
 from torchvision.models import resnet18, ResNet18_Weights
@@ -183,13 +183,11 @@ def generate_caption(pil_image: Image.Image) -> str:
 
 
 @torch.no_grad()
-def text_to_image(query: str):
-    """Return (img1, label1, img2, label2, img3, label3) for the top-3 matches."""
-    empty = [None, "", None, "", None, ""]
+def text_to_image(query: str) -> list[tuple[Image.Image, float, str]]:
+    """Return [(PIL.Image, similarity_score, caption), ...] for the top-3 CLIP matches."""
     if not query.strip() or all_image_embeddings is None:
-        return empty
+        return []
 
-    # Encode query with CLIP
     text_inputs = clip_processor(text=[query], return_tensors="pt",
                                  truncation=True, padding=True)
     text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
@@ -198,197 +196,64 @@ def text_to_image(query: str):
     text_emb    = clip_model.text_projection(text_out.pooler_output)
     text_emb    = F.normalize(text_emb, dim=-1)
 
-    # Cosine similarity → top 3
     sims        = (text_emb @ all_image_embeddings.T).squeeze(0)
     top_k       = min(3, len(all_image_paths))
     top_indices = sims.topk(top_k).indices.cpu().tolist()
 
-    outputs = []
+    results: list[tuple[Image.Image, float, str]] = []
     for idx in top_indices:
-        img  = Image.open(all_image_paths[idx]).convert("RGB")
-        sim  = sims[idx].item()
-        cap  = generate_caption(img)
-        outputs.append(img)
-        outputs.append(f"Similarity: {sim:.3f}\n\"{cap}\"")
-
-    while len(outputs) < 6:
-        outputs += [None, ""]
-
-    return outputs
+        img = Image.open(all_image_paths[idx]).convert("RGB")
+        results.append((img, float(sims[idx].item()), generate_caption(img)))
+    return results
 
 
-# ── Pre-generate gallery captions ─────────────────────────────────────────────
-_example_paths = sorted(
-    glob.glob("examples/*.jpg") + glob.glob("examples/*.jpeg") + glob.glob("examples/*.png")
-)[:6]
-
-gallery_items: list[tuple] = []
-if _example_paths:
-    print("Pre-generating gallery captions…")
-    for path in _example_paths:
-        img = Image.open(path).convert("RGB")
-        cap = generate_caption(img)
-        gallery_items.append((img, cap))
-        print(f"  {os.path.basename(path)}: {cap}")
+# ── Flask app ─────────────────────────────────────────────────────────────────
+app = Flask(__name__)
 
 
-# ── Gradio UI ─────────────────────────────────────────────────────────────────
-_val_loss = ckpt["val_loss"]
-_ppl      = math.exp(_val_loss)
-_epoch    = ckpt["epoch"]
+def _pil_to_data_uri(img: Image.Image) -> str:
+    buf = io.BytesIO()
+    img.save(buf, format="JPEG", quality=88)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
 
-with gr.Blocks(title="Cross-Modal Demo") as demo:
 
-    gr.Markdown(f"""
-# Cross-Modal Generation — Image Captioning & Text-to-Image Retrieval
-ResNet18 encoder → Transformer decoder · Trained on Flickr8k &nbsp;|&nbsp;
-**Val Loss: {_val_loss:.4f}** · **PPL: {_ppl:.2f}** · Best epoch: {_epoch}/20
-""")
+@app.route("/")
+def index():
+    return render_template("index.html")
 
-    # ── Tab 1: Text → Image Retrieval ─────────────────────────────────────────
-    with gr.Tab("Text to Image Retrieval"):
-            gr.Markdown("""
-Type a description below. **CLIP** finds the closest matching images from the Flickr8k dataset
-using cosine similarity in a shared text-image embedding space.
-Your **custom captioning model** then reads each image and generates its own description —
-showing how the two modalities connect.
-""")
-            with gr.Row():
-                query_box  = gr.Textbox(
-                    label="Text Query",
-                    placeholder="e.g.  a dog playing in the water",
-                    scale=4,
-                )
-                search_btn = gr.Button("Search", variant="primary", scale=1)
 
-            gr.Examples(
-                examples=[
-                    ["a dog running on the beach"],
-                    ["two children playing in the snow"],
-                    ["a man riding a horse"],
-                    ["a woman with a red dress"],
-                    ["a group of people at a party"],
-                    ["a cat sitting on a chair"],
-                ],
-                inputs=query_box,
-                label="Try one of these:",
-            )
+@app.route("/caption", methods=["POST"])
+def caption_route():
+    if "image" not in request.files:
+        return jsonify({"error": "no image uploaded"}), 400
+    try:
+        img = Image.open(request.files["image"].stream).convert("RGB")
+    except Exception as e:
+        return jsonify({"error": f"could not read image: {e}"}), 400
+    return jsonify({"caption": generate_caption(img)})
 
-            gr.Markdown("### Top 3 Matches")
-            with gr.Row():
-                result_imgs = [gr.Image(show_label=False, height=260) for _ in range(3)]
-            with gr.Row():
-                result_caps = [
-                    gr.Textbox(show_label=False, lines=3)
-                    for _ in range(3)
-                ]
 
-            search_btn.click(
-                fn=text_to_image,
-                inputs=query_box,
-                outputs=[
-                    result_imgs[0], result_caps[0],
-                    result_imgs[1], result_caps[1],
-                    result_imgs[2], result_caps[2],
-                ],
-            )
-            query_box.submit(
-                fn=text_to_image,
-                inputs=query_box,
-                outputs=[
-                    result_imgs[0], result_caps[0],
-                    result_imgs[1], result_caps[1],
-                    result_imgs[2], result_caps[2],
-                ],
-            )
+@app.route("/retrieve", methods=["POST"])
+def retrieve_route():
+    data  = request.get_json(silent=True) or {}
+    query = (data.get("query") or "").strip()
+    if not query:
+        return jsonify({"error": "query is empty"}), 400
+    if all_image_embeddings is None:
+        return jsonify({"error": "no image index available on this server"}), 503
 
-    # ── Tab 2: Image → Caption ────────────────────────────────────────────────
-    with gr.Tab("Image to Caption"):
-            gr.Markdown(
-                "Upload any image — the model generates a natural-language caption "
-                "one token at a time using greedy decoding."
-            )
-            with gr.Row():
-                with gr.Column(scale=1):
-                    img_input  = gr.Image(type="pil", label="Input Image", height=340)
-                    cap_btn    = gr.Button("Generate Caption", variant="primary", size="lg")
-                with gr.Column(scale=1):
-                    caption_out = gr.Textbox(
-                        label="Generated Caption",
-                        lines=5,
-                        placeholder="Upload an image to generate a caption…",
-                    )
-
-            if _example_paths:
-                gr.Examples(
-                    examples=_example_paths,
-                    inputs=img_input,
-                    label="Example images — click to load:",
-                    examples_per_page=6,
-                )
-
-            cap_btn.click(fn=generate_caption, inputs=img_input, outputs=caption_out)
-
-    # ── Tab 3: Gallery ────────────────────────────────────────────────────────
-    with gr.Tab("Gallery"):
-            if gallery_items:
-                gr.Markdown(
-                    "All captions generated automatically at server startup — "
-                    "no human input, no cherry-picking."
-                )
-                cols = min(3, len(gallery_items))
-                for row_start in range(0, len(gallery_items), cols):
-                    row = gallery_items[row_start : row_start + cols]
-                    with gr.Row():
-                        for img, cap in row:
-                            with gr.Column():
-                                gr.Image(value=img, show_label=False, height=220)
-                                gr.Textbox(value=f'"{cap}"', show_label=False, lines=2)
-            else:
-                gr.Markdown(
-                    "Add `.jpg` / `.png` images to an `examples/` folder next to `demo.py` "
-                    "and restart the server to populate this gallery."
-                )
-
-    # ── Tab 4: Model & Results ────────────────────────────────────────────────
-    with gr.Tab("Model and Results"):
-            with gr.Row():
-                with gr.Column():
-                    gr.Markdown("""
-### Architecture
-
-| Component | Details |
-|---|---|
-| Image Encoder | ResNet18 (ImageNet pretrained), truncated → 7×7×512 → 1×1 conv → **49 image tokens** |
-| Tokenizer | BERT `bert-base-uncased` (30,522 vocab) |
-| Decoder | 4-layer Transformer decoder, d=256, 4 heads, FFN=1024, `norm_first=True` |
-| Weight tying | Output projection shares weights with input embedding |
-| Retrieval | CLIP ViT-B/32 — joint image-text embedding, cosine similarity |
-| Training | Teacher forcing · AdamW · lr=3e-4 · batch=64 · 20 epochs |
-| Inference | Greedy decoding — argmax at each step, stops at `[SEP]` |
-""")
-                with gr.Column():
-                    gr.Markdown(f"""
-### Training Results
-
-| Epoch | Val Loss | Val PPL |
-|:---:|:---:|:---:|
-| 1 | 5.1747 | 176.74 |
-| 5 | 3.3075 | 27.32 |
-| 8 | 3.0613 | 21.35 |
-| 10 | 3.0123 | 20.34 |
-| **{_epoch}** | **{_val_loss:.4f}** | **{_ppl:.2f}** ← best |
-
-Trained on **Flickr8k** — 8,091 images × 5 captions ≈ 40k pairs
-Hardware: NVIDIA H100 NVL (~53 s / epoch)
-Parameters: **23,343,936** trainable
-""")
+    results = text_to_image(query)
+    return jsonify([
+        {"image": _pil_to_data_uri(img), "score": round(score, 4), "caption": cap}
+        for img, score, cap in results
+    ])
 
 
 # ── Launch ────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--share", action="store_true", help="Public Gradio link")
     parser.add_argument("--port", type=int, default=7860)
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--debug", action="store_true")
     args = parser.parse_args()
-    demo.launch(share=args.share, server_port=args.port, theme=gr.themes.Soft())
+    app.run(host=args.host, port=args.port, debug=args.debug, use_reloader=False)

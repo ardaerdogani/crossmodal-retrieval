@@ -3,7 +3,18 @@ checkpoints/
 __pycache__/
 *.pyc
 venv/
+.venv/
+env/
 .ipynb_checkpoints/
+
+# Flask / web demo runtime
+instance/
+.gradio/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
 
 # generated outputs (root-level only)
 /*.png
@@ -11,8 +22,9 @@ venv/
 /*.jpeg
 /*.pdf
 
-# keep assets tracked
+# keep assets and examples tracked
 !assets/
+!examples/
 
 # environment / system
 .env
@@ -20,3 +32,6 @@ venv/
 
 # Jupyter
 *.nbconvert.ipynb
+
+# CLIP embeddings cache inside examples/
+examples/clip_embeddings.pt

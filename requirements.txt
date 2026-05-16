@@ -3,6 +3,6 @@ torchvision
 transformers
 kagglehub
 matplotlib
-gradio
+flask
 Pillow
 nltk

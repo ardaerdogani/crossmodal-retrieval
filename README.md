@@ -148,6 +148,9 @@ torchvision
 transformers
 kagglehub
 matplotlib
+gradio
+Pillow
+nltk
 ```
 
 ## Setup

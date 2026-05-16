@@ -117,19 +117,33 @@ clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 clip_model.eval()
 print("CLIP ready.")
 
+# ── Pick image source: full dataset → examples/ fallback ──────────────────────
+_examples_dir = Path("examples")
+if os.path.isdir(IMAGES_DIR):
+    _img_source  = Path(IMAGES_DIR)
+    _cache_file  = EMBEDDINGS_CACHE
+elif _examples_dir.is_dir() and any(_examples_dir.glob("*.[jp][pn]g")):
+    _img_source  = _examples_dir
+    _cache_file  = "examples/clip_embeddings.pt"
+    print("Full dataset not found — retrieval will use examples/ folder.")
+else:
+    _img_source  = None
+    _cache_file  = None
+    print("No image source found — text retrieval disabled.")
+
 # ── Pre-compute / load CLIP image embeddings ──────────────────────────────────
 all_image_paths: list[str] = []
 all_image_embeddings: torch.Tensor | None = None
 
-if os.path.isdir(IMAGES_DIR):
-    if os.path.exists(EMBEDDINGS_CACHE):
-        cache                = torch.load(EMBEDDINGS_CACHE, map_location="cpu", weights_only=True)
+if _img_source is not None:
+    if _cache_file and os.path.exists(_cache_file):
+        cache                = torch.load(_cache_file, map_location="cpu", weights_only=True)
         all_image_paths      = cache["paths"]
         all_image_embeddings = cache["embeddings"].to(device)
         print(f"Loaded {len(all_image_paths):,} CLIP embeddings from cache.")
     else:
-        print(f"Computing CLIP embeddings for {IMAGES_DIR} (first run only — cached after this)...")
-        _paths = sorted(Path(IMAGES_DIR).glob("*.jpg")) + sorted(Path(IMAGES_DIR).glob("*.png"))
+        print(f"Computing CLIP embeddings for {_img_source} (cached after this)...")
+        _paths = sorted(_img_source.glob("*.jpg")) + sorted(_img_source.glob("*.png"))
         all_image_paths = [str(p) for p in _paths]
         _batch, _accum  = 128, []
         with torch.no_grad():
@@ -144,11 +158,10 @@ if os.path.isdir(IMAGES_DIR):
                 if i % (10 * _batch) == 0:
                     print(f"  {i}/{len(all_image_paths)} done…")
         all_image_embeddings = torch.cat(_accum, dim=0)
-        torch.save({"paths": all_image_paths, "embeddings": all_image_embeddings}, EMBEDDINGS_CACHE)
+        if _cache_file:
+            torch.save({"paths": all_image_paths, "embeddings": all_image_embeddings}, _cache_file)
         all_image_embeddings = all_image_embeddings.to(device)
-        print(f"Embedded {len(all_image_paths):,} images → saved to {EMBEDDINGS_CACHE}")
-else:
-    print(f"Warning: {IMAGES_DIR} not found — text retrieval tab will be disabled.")
+        print(f"Embedded {len(all_image_paths):,} images.")
 
 
 # ── Inference helpers ─────────────────────────────────────────────────────────

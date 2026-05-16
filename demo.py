@@ -224,7 +224,7 @@ _val_loss = ckpt["val_loss"]
 _ppl      = math.exp(_val_loss)
 _epoch    = ckpt["epoch"]
 
-with gr.Blocks(theme=gr.themes.Soft(), title="Cross-Modal Demo") as demo:
+with gr.Blocks(title="Cross-Modal Demo") as demo:
 
     gr.Markdown(f"""
 # Cross-Modal Generation — Image Captioning & Text-to-Image Retrieval
@@ -268,7 +268,7 @@ showing how the two modalities connect.
                 result_imgs = [gr.Image(show_label=False, height=260) for _ in range(3)]
             with gr.Row():
                 result_caps = [
-                    gr.Textbox(show_label=False, lines=3, show_copy_button=True)
+                    gr.Textbox(show_label=False, lines=3)
                     for _ in range(3)
                 ]
 
@@ -306,7 +306,6 @@ showing how the two modalities connect.
                         label="Generated Caption",
                         lines=5,
                         placeholder="Upload an image to generate a caption…",
-                        show_copy_button=True,
                     )
 
             if _example_paths:
@@ -382,4 +381,4 @@ if __name__ == "__main__":
     parser.add_argument("--share", action="store_true", help="Public Gradio link")
     parser.add_argument("--port", type=int, default=7860)
     args = parser.parse_args()
-    demo.launch(share=args.share, server_port=args.port)
+    demo.launch(share=args.share, server_port=args.port, theme=gr.themes.Soft())
